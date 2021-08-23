@@ -7,6 +7,7 @@ use URL;
 use Config;
 use Session;
 use Log;
+use Concrete\Core\Routing\Redirect;
 
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Payment\Method as StorePaymentMethod;
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order as StoreOrder;
@@ -57,21 +58,17 @@ class CommunityStorePayrexxPaymentMethod extends StorePaymentMethod
         $gateway = $this->getGatewayURL($order);
 
         if ($gateway && $order) {
-
-            $order->setTransactionReference($gateway['reference_id']);
-            $order->save();
-
-            $this->redirect($gateway['link']);
+            /*$order->setTransactionReference($gateway['reference_id']);
+            $order->save();*/
         } else {
-            $this->redirect('/checkout/failed#payment');
+            return Redirect::to("/checkout/failed#payment");
         }
     }
 
     public static function validateCompletion()
     {
         // if we get to this function, we returned from payrexx after a payment
-        self::redirect('/checkout/complete');
-
+        return Redirect::to("/checkout/complete");
     }
 
     public function checkoutForm()
@@ -107,14 +104,16 @@ class CommunityStorePayrexxPaymentMethod extends StorePaymentMethod
         // empty array = all available psps
         $gateway->setPsp([]);
 
-        $gateway->setReferenceId( uniqid('trans_'));
+        $referenceID = uniqid('trans_');
+
+        $gateway->setReferenceId($referenceID);
 
         $customer = new StoreCustomer();
 
         $address = $customer->getValue("billing_address")->address1;
 
         if ($customer->getValue("billing_address")->address2) {
-            $address .= ', '. $customer->getValue("billing_address")->address2;
+            $address .= ', ' . $customer->getValue("billing_address")->address2;
         }
 
         $gateway->addField($type = 'title', $value = 'mister');
@@ -137,6 +136,19 @@ class CommunityStorePayrexxPaymentMethod extends StorePaymentMethod
         return false;
     }
 
+    public function getAction()
+    {
+        $order = StoreOrder::getByID(Session::get('orderID'));
+        $gateway = $this->getGatewayURL($order);
+
+        if ($gateway && $order) {
+            $order->setTransactionReference($gateway['reference_id']);
+            $order->save();
+            return $gateway['link'];
+        } else {
+            return "/checkout/failed#payment";
+        }
+    }
 
     public static function callback()
     {
@@ -152,7 +164,7 @@ class CommunityStorePayrexxPaymentMethod extends StorePaymentMethod
             $order = $em->getRepository('Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order')->findOneBy(array('transactionReference' => $refid));
 
             if ($order) {
-                if ($status == 'confirmed' ) {
+                if ($status == 'confirmed') {
                     $order->completePayment(false); // set false as it's not part of the same request as the order
                     $order->save();
 
@@ -162,7 +174,7 @@ class CommunityStorePayrexxPaymentMethod extends StorePaymentMethod
                     }
                 }
 
-                if ($status == 'cancelled' || $status == 'failed' || $status == 'expired' || $status == 'rejected' || $status == 'waiting' ) {
+                if ($status == 'cancelled' || $status == 'failed' || $status == 'expired' || $status == 'rejected' || $status == 'waiting') {
                     $order->setPaid(null);
                     $order->save();
                 }
@@ -172,12 +184,10 @@ class CommunityStorePayrexxPaymentMethod extends StorePaymentMethod
                     $order->save();
                 }
             }
-
         }
 
 
         exit();
-
     }
 
 
@@ -200,8 +210,4 @@ class CommunityStorePayrexxPaymentMethod extends StorePaymentMethod
     {
         return false;
     }
-
-
-
-
 }
